@@ -4,6 +4,7 @@ import WinSDK
 import WindowsDevicesBluetooth
 import WindowsDevicesBluetoothAdvertisement
 import WindowsStorageStreams
+import CryptoKit
 
 class WindowsBluetoothMeshService: NSObject, MeshServiceProtocol {
     weak var delegate: BitchatDelegate?
@@ -69,46 +70,86 @@ class WindowsBluetoothMeshService: NSObject, MeshServiceProtocol {
         return "unknown"
     }
 
+    private func broadcastText(_ text: String, duration: TimeInterval = 1.0) {
+        let adv = Windows.Devices.Bluetooth.Advertisement.BluetoothLEAdvertisement()
+        let md = Windows.Devices.Bluetooth.Advertisement.BluetoothLEManufacturerData()
+        md.companyId = manufacturerId
+        md.data = text.data(using: .utf8)?.toBuffer() ?? IBuffer()
+        _ = adv.manufacturerData.append(md)
+        let pub = Windows.Devices.Bluetooth.Advertisement.BluetoothLEAdvertisementPublisher(advertisement: adv)
+        pub.start()
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+            pub.stop()
+        }
+    }
+
     // MARK: - Messaging
     func sendBroadcastAnnounce() {
-        // Windows implementation pending
+        broadcastText("HELLO:\(myPeerID)")
     }
 
     func sendMessage(_ content: String, mentions: [String], channel: String?) {
-        // Windows implementation pending
+        guard !content.isEmpty else { return }
+        broadcastText("MSG:\(content)")
     }
 
     func sendPrivateMessage(_ content: String, to peerID: String, recipientNickname: String, messageID: String?) {
+        guard !content.isEmpty else { return }
+        broadcastText("PM:\(peerID)|\(content)")
     }
 
     func sendEncryptedChannelMessage(_ content: String, mentions: [String], channel: String, channelKey: SymmetricKey, messageID: String?, timestamp: Date?) {
+        guard let data = content.data(using: .utf8) else { return }
+        if let sealed = try? AES.GCM.seal(data, using: channelKey),
+           let combined = sealed.combined {
+            let encoded = combined.base64EncodedString()
+            broadcastText("ENC:\(channel)|\(encoded)")
+        }
     }
 
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: String) {
+        guard let data = receipt.encode(), let json = String(data: data, encoding: .utf8) else { return }
+        broadcastText("READ:\(peerID)|\(json)")
     }
 
     func sendChannelMetadata(_ metadata: ChannelMetadata) {
+        guard let data = metadata.encode(), let json = String(data: data, encoding: .utf8) else { return }
+        broadcastText("META:\(json)")
     }
 
     func sendChannelLeaveNotification(_ channel: String) {
+        broadcastText("LEAVE:\(channel)")
     }
 
     func announcePasswordProtectedChannel(_ channel: String, creatorID: String?, keyCommitment: String?) {
+        let creator = creatorID ?? myPeerID
+        let commitment = keyCommitment ?? ""
+        broadcastText("PROT:\(channel)|\(creator)|\(commitment)")
     }
 
     func sendChannelRetentionAnnouncement(_ channel: String, enabled: Bool) {
+        broadcastText("RETN:\(channel)|\(enabled ? "1" : "0")")
     }
 
     func sendChannelPasswordUpdate(_ password: String, channel: String, newCommitment: String, to peerID: String) {
+        broadcastText("PWD:\(channel)|\(newCommitment)")
     }
 
     func sendChannelKeyVerifyRequest(_ request: ChannelKeyVerifyRequest, to peers: [String]) {
+        guard let data = request.encode(), let json = String(data: data, encoding: .utf8) else { return }
+        broadcastText("VREQ:\(json)")
     }
 
     func sendChannelKeyVerifyResponse(_ response: ChannelKeyVerifyResponse, to peerID: String) {
+        guard let data = response.encode(), let json = String(data: data, encoding: .utf8) else { return }
+        broadcastText("VRES:\(json)")
     }
 
     func emergencyDisconnectAll() {
+        watcher?.stop()
+        publisher?.stop()
+        watcher = nil
+        publisher = nil
     }
 
     func getNoiseService() -> NoiseEncryptionService {
