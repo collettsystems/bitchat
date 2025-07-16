@@ -163,14 +163,14 @@ class ChatViewModel: ObservableObject {
             name: NSApplication.willTerminateNotification,
             object: nil
         )
-        #else
+        #elseif os(iOS)
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(appDidBecomeActive),
             name: UIApplication.didBecomeActiveNotification,
             object: nil
         )
-        
+
         // Add screenshot detection for iOS
         NotificationCenter.default.addObserver(
             self,
@@ -178,7 +178,7 @@ class ChatViewModel: ObservableObject {
             name: UIApplication.userDidTakeScreenshotNotification,
             object: nil
         )
-        
+
         // Add app lifecycle observers to save data
         NotificationCenter.default.addObserver(
             self,
@@ -192,6 +192,8 @@ class ChatViewModel: ObservableObject {
             name: UIApplication.willTerminateNotification,
             object: nil
         )
+        #elseif os(Windows)
+        // Windows placeholder - integrate WinUI lifecycle events here
         #endif
     }
     

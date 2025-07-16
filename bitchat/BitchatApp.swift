@@ -6,9 +6,12 @@
 // For more information, see <https://unlicense.org>
 //
 
+#if os(iOS) || os(macOS)
 import SwiftUI
 import UserNotifications
+#endif
 
+#if os(iOS) || os(macOS)
 @main
 struct BitchatApp: App {
     @StateObject private var chatViewModel = ChatViewModel()
@@ -176,3 +179,4 @@ extension String {
         self.isEmpty ? nil : self
     }
 }
+#endif
