@@ -28,25 +28,25 @@ class SecureIdentityStateManager {
     private let queue = DispatchQueue(label: "bitchat.identity.state", attributes: .concurrent)
     
     // Encryption key
-    private let encryptionKey: SymmetricKey
+    private var encryptionKey: Data
+    private let crypto: CryptoProvider
     
-    private init() {
+    private init(crypto: CryptoProvider = CryptoKitProvider()) {
+        self.crypto = crypto
         // Generate or retrieve encryption key from keychain
-        let loadedKey: SymmetricKey
+        let loadedKeyData: Data
         
         // Try to load from keychain
         if let keyData = keychain.getIdentityKey(forKey: encryptionKeyName) {
-            loadedKey = SymmetricKey(data: keyData)
+            loadedKeyData = keyData
         }
         // Generate new key if needed
         else {
-            loadedKey = SymmetricKey(size: .bits256)
-            let keyData = loadedKey.withUnsafeBytes { Data($0) }
-            // Save to keychain
-            _ = keychain.saveIdentityKey(keyData, forKey: encryptionKeyName)
+            loadedKeyData = crypto.randomBytes(count: 32)
+            _ = keychain.saveIdentityKey(loadedKeyData, forKey: encryptionKeyName)
         }
-        
-        self.encryptionKey = loadedKey
+
+        self.encryptionKey = loadedKeyData
         
         // Load identity cache on init
         loadIdentityCache()
@@ -61,8 +61,7 @@ class SecureIdentityStateManager {
         }
         
         do {
-            let sealedBox = try AES.GCM.SealedBox(combined: encryptedData)
-            let decryptedData = try AES.GCM.open(sealedBox, using: encryptionKey)
+            let decryptedData = try crypto.aesGCMDecrypt(encryptedData, key: encryptionKey)
             cache = try JSONDecoder().decode(IdentityCache.self, from: decryptedData)
         } catch {
             // Log error but continue with empty cache
@@ -73,8 +72,8 @@ class SecureIdentityStateManager {
     func saveIdentityCache() {
         do {
             let data = try JSONEncoder().encode(cache)
-            let sealedBox = try AES.GCM.seal(data, using: encryptionKey)
-            _ = keychain.saveIdentityKey(sealedBox.combined!, forKey: cacheKey)
+            let encrypted = try crypto.aesGCMEncrypt(data, key: encryptionKey)
+            _ = keychain.saveIdentityKey(encrypted, forKey: cacheKey)
         } catch {
             SecurityLogger.log("Failed to save identity cache", category: SecurityLogger.security, level: .error)
         }

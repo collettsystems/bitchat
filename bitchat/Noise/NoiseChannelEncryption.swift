@@ -10,9 +10,18 @@ import Foundation
 import CryptoKit
 import os.log
 
+// Crypto abstraction
+private let defaultCryptoProvider: CryptoProvider = CryptoKitProvider()
+
 // MARK: - Noise Channel Encryption
 
 class NoiseChannelEncryption {
+    private let crypto: CryptoProvider
+
+    init(crypto: CryptoProvider = defaultCryptoProvider) {
+        self.crypto = crypto
+    }
+
     // Channel keys derived from passwords
     private var channelKeys: [String: SymmetricKey] = [:]
     private let keyQueue = DispatchQueue(label: "chat.bitchat.noise.channels", attributes: .concurrent)
@@ -39,12 +48,12 @@ class NoiseChannelEncryption {
         let salt = saltComponents.data(using: .utf8)!
         
         // Increased iterations for better security (OWASP recommends 210,000 for PBKDF2-SHA256)
-        let keyData = PBKDF2<SHA256>(
+        let keyData = crypto.pbkdf2SHA256(
             password: password.data(using: .utf8)!,
             salt: salt,
             iterations: 210_000,
             keyByteCount: 32
-        ).makeIterator()
+        )
         
         return SymmetricKey(data: keyData)
     }
@@ -125,13 +134,13 @@ class NoiseChannelEncryption {
         let messageData = message.data(using: .utf8)!
         
         // Generate random nonce
-        let nonce = ChaChaPoly.Nonce()
-        
+        let nonce = crypto.randomBytes(count: 12)
+
         // Encrypt with channel key
-        let sealedBox = try ChaChaPoly.seal(messageData, using: key, nonce: nonce)
-        
-        // Return nonce + ciphertext + tag
-        return nonce.withUnsafeBytes { Data($0) } + sealedBox.ciphertext + sealedBox.tag
+        let ciphertext = try crypto.chachaPolyEncrypt(messageData, key: key.withUnsafeBytes { Data($0) }, nonce: nonce, aad: Data())
+
+        // Return nonce + ciphertext
+        return nonce + ciphertext
     }
     
     /// Decrypt channel message
@@ -150,11 +159,8 @@ class NoiseChannelEncryption {
         let tag = encryptedData.suffix(16)
         
         // Create sealed box
-        let nonce = try ChaChaPoly.Nonce(data: nonceData)
-        let sealedBox = try ChaChaPoly.SealedBox(nonce: nonce, ciphertext: ciphertext, tag: tag)
-        
-        // Decrypt
-        let decryptedData = try ChaChaPoly.open(sealedBox, using: key)
+        let combined = ciphertext + tag
+        let decryptedData = try crypto.chachaPolyDecrypt(combined, key: key.withUnsafeBytes { Data($0) }, nonce: nonceData, aad: Data())
         
         guard let message = String(data: decryptedData, encoding: .utf8) else {
             throw NoiseChannelError.decryptionFailed
@@ -168,10 +174,7 @@ class NoiseChannelEncryption {
     /// Create encrypted channel key packet for sharing via Noise session
     func createChannelKeyPacket(password: String, channel: String) -> Data? {
         // Generate a unique nonce for replay protection
-        var nonceData = Data(count: 16)
-        _ = nonceData.withUnsafeMutableBytes { bytes in
-            SecRandomCopyBytes(kSecRandomDefault, 16, bytes.baseAddress!)
-        }
+        let nonceData = crypto.randomBytes(count: 16)
         let nonce = nonceData.base64EncodedString()
         
         let packet = ChannelKeyPacket(

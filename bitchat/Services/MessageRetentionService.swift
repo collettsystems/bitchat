@@ -22,14 +22,16 @@ struct StoredMessage: Codable {
 
 class MessageRetentionService {
     static let shared = MessageRetentionService()
-    
+
     private let documentsDirectory: URL
     private let messagesDirectory: URL
     private let favoriteChannelsKey = "bitchat.favoriteChannels"
     private let retentionDays = 7 // Messages retained for 7 days
-    private let encryptionKey: SymmetricKey
+    private var encryptionKey: Data
+    private let crypto: CryptoProvider
     
-    private init() {
+    private init(crypto: CryptoProvider = CryptoKitProvider()) {
+        self.crypto = crypto
         // Get documents directory with fallback to temp directory
         if let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
             documentsDirectory = docsDir
@@ -45,22 +47,20 @@ class MessageRetentionService {
         try? FileManager.default.createDirectory(at: messagesDirectory, withIntermediateDirectories: true)
         
         // Generate or retrieve encryption key from keychain
-        let loadedKey: SymmetricKey
+        let loadedKeyData: Data
         
         // Try to load from keychain
         if let keyData = KeychainManager.shared.getIdentityKey(forKey: "messageRetentionKey") {
-            loadedKey = SymmetricKey(data: keyData)
+            loadedKeyData = keyData
         }
         // Generate new key if needed
         else {
-            loadedKey = SymmetricKey(size: .bits256)
-            let keyData = loadedKey.withUnsafeBytes { Data($0) }
-            // Save to keychain
-            _ = KeychainManager.shared.saveIdentityKey(keyData, forKey: "messageRetentionKey")
+            loadedKeyData = crypto.randomBytes(count: 32)
+            _ = KeychainManager.shared.saveIdentityKey(loadedKeyData, forKey: "messageRetentionKey")
         }
-        
+
         // Now assign the final value
-        self.encryptionKey = loadedKey
+        self.encryptionKey = loadedKeyData
         
         // Clean up old messages on init
         cleanupOldMessages()
@@ -160,17 +160,15 @@ class MessageRetentionService {
     
     private func encrypt(_ data: Data) -> Data? {
         do {
-            let sealedBox = try AES.GCM.seal(data, using: encryptionKey)
-            return sealedBox.combined
+            return try crypto.aesGCMEncrypt(data, key: encryptionKey)
         } catch {
             return nil
         }
     }
-    
+
     private func decrypt(_ data: Data) -> Data? {
         do {
-            let sealedBox = try AES.GCM.SealedBox(combined: data)
-            return try AES.GCM.open(sealedBox, using: encryptionKey)
+            return try crypto.aesGCMDecrypt(data, key: encryptionKey)
         } catch {
             return nil
         }
