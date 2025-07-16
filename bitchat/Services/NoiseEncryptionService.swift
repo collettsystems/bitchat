@@ -13,6 +13,7 @@ import os.log
 // MARK: - Noise Encryption Service
 
 class NoiseEncryptionService {
+    private let crypto: CryptoProvider
     // Static identity key (persistent across sessions)
     private let staticIdentityKey: Curve25519.KeyAgreement.PrivateKey
     public let staticIdentityPublicKey: Curve25519.KeyAgreement.PublicKey
@@ -21,7 +22,7 @@ class NoiseEncryptionService {
     private let sessionManager: NoiseSessionManager
     
     // Channel encryption
-    private let channelEncryption = NoiseChannelEncryption()
+    private let channelEncryption: NoiseChannelEncryption
     
     // Peer fingerprints (SHA256 hash of static public key)
     private var peerFingerprints: [String: String] = [:] // peerID -> fingerprint
@@ -41,23 +42,20 @@ class NoiseEncryptionService {
     var onPeerAuthenticated: ((String, String) -> Void)? // peerID, fingerprint
     var onHandshakeRequired: ((String) -> Void)? // peerID needs handshake
     
-    init() {
+    init(crypto: CryptoProvider = CryptoKitProvider()) {
+        self.crypto = crypto
+        self.channelEncryption = NoiseChannelEncryption(crypto: crypto)
         // Load or create static identity key (ONLY from keychain)
-        let loadedKey: Curve25519.KeyAgreement.PrivateKey
-        
-        // Try to load from keychain
-        if let identityData = KeychainManager.shared.getIdentityKey(forKey: "noiseStaticKey"),
-           let key = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: identityData) {
-            loadedKey = key
+        let loadedKeyData: Data
+
+        if let identityData = KeychainManager.shared.getIdentityKey(forKey: "noiseStaticKey") {
+            loadedKeyData = identityData
+        } else {
+            loadedKeyData = crypto.generatePrivateKey()
+            _ = KeychainManager.shared.saveIdentityKey(loadedKeyData, forKey: "noiseStaticKey")
         }
-        // If no identity exists, create new one
-        else {
-            loadedKey = Curve25519.KeyAgreement.PrivateKey()
-            let keyData = loadedKey.rawRepresentation
-            
-            // Save to keychain
-            _ = KeychainManager.shared.saveIdentityKey(keyData, forKey: "noiseStaticKey")
-        }
+
+        let loadedKey = try! Curve25519.KeyAgreement.PrivateKey(rawRepresentation: loadedKeyData)
         
         // Now assign the final value
         self.staticIdentityKey = loadedKey
@@ -84,8 +82,8 @@ class NoiseEncryptionService {
     
     /// Get our identity fingerprint
     func getIdentityFingerprint() -> String {
-        let hash = SHA256.hash(data: staticIdentityPublicKey.rawRepresentation)
-        return hash.map { String(format: "%02x", $0) }.joined()
+        let hashData = crypto.sha256(staticIdentityPublicKey.rawRepresentation)
+        return hashData.map { String(format: "%02x", $0) }.joined()
     }
     
     /// Get peer's public key data
@@ -105,9 +103,8 @@ class NoiseEncryptionService {
     func signData(_ data: Data) -> Data? {
         // For now, use HMAC with the private key as a simple signature
         // This is not cryptographically ideal but works for identity binding
-        let key = SymmetricKey(data: staticIdentityKey.rawRepresentation)
-        let signature = HMAC<SHA256>.authenticationCode(for: data, using: key)
-        return Data(signature)
+        let sig = crypto.hmacSHA256(data, key: staticIdentityKey.rawRepresentation)
+        return sig
     }
     
     /// Verify signature with a peer's public key
@@ -263,8 +260,8 @@ class NoiseEncryptionService {
     }
     
     private func calculateFingerprint(for publicKey: Curve25519.KeyAgreement.PublicKey) -> String {
-        let hash = SHA256.hash(data: publicKey.rawRepresentation)
-        return hash.map { String(format: "%02x", $0) }.joined()
+        let hashData = crypto.sha256(publicKey.rawRepresentation)
+        return hashData.map { String(format: "%02x", $0) }.joined()
     }
     
     // MARK: - Channel Encryption

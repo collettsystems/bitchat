@@ -7,7 +7,17 @@ var supportedPlatforms: [SupportedPlatform] = [
     .macOS(.v13)
 ]
 #if os(Windows)
-supportedPlatforms.append(.windows(.v10))
+ supportedPlatforms.append(.windows(.v10))
+#endif
+
+var packageDependencies: [Package.Dependency] = []
+#if os(Windows)
+ packageDependencies.append(.package(url: "https://github.com/jedisct1/swift-sodium.git", from: "0.9.1"))
+#endif
+
+var targetDependencies: [Target.Dependency] = []
+#if os(Windows)
+ targetDependencies.append(.product(name: "Sodium", package: "swift-sodium"))
 #endif
 
 let package = Package(
@@ -19,10 +29,12 @@ let package = Package(
             targets: ["bitchat"]
         ),
     ],
+    dependencies: packageDependencies,
     targets: [
         .executableTarget(
             name: "bitchat",
+            dependencies: targetDependencies,
             path: "bitchat"
-        ),
+        )
     ]
 )
