@@ -3742,6 +3742,8 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         return "iOS"
         #elseif os(macOS)
         return "macOS"
+        #elseif os(Windows)
+        return "Windows"
         #else
         return "Unknown"
         #endif

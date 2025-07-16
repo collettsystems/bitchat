@@ -6,7 +6,8 @@ let package = Package(
     name: "bitchat",
     platforms: [
         .iOS(.v16),
-        .macOS(.v13)
+        .macOS(.v13),
+        .windows(.v10)
     ],
     products: [
         .executable(
