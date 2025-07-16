@@ -193,7 +193,19 @@ class ChatViewModel: ObservableObject {
             object: nil
         )
         #elseif os(Windows)
-        // Windows placeholder - integrate WinUI lifecycle events here
+        if let app = try? Windows.UI.Xaml.Application.Current {
+            _ = try? app.add_Suspending { [weak self] _, _ in
+                self?.appWillResignActive()
+            }
+            _ = try? app.add_Resuming { [weak self] _ in
+                self?.appDidBecomeActive()
+            }
+        }
+        if let window = try? Windows.UI.Xaml.Window.Current {
+            _ = try? window.add_Closed { [weak self] _, _ in
+                self?.appWillTerminate()
+            }
+        }
         #endif
     }
     

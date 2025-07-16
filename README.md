@@ -168,3 +168,4 @@ Run `just clean` afterwards to restore things to original state for mobile app b
 
 Experimental WinUI support is available. See [BUILD_WINDOWS.md](BUILD_WINDOWS.md) for
 instructions on compiling the Swift core as a library and creating a WinUI front-end in C#.
+The `WinUIExample` folder contains a minimal project demonstrating the C# bindings.
