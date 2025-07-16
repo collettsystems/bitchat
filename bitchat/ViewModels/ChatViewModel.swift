@@ -61,12 +61,11 @@ class ChatViewModel: ObservableObject {
     @Published var retentionEnabledChannels: Set<String> = []  // Channels where owner enabled retention for all members
     @Published var channelVerificationStatus: [String: ChannelVerificationStatus] = [:]  // Track verification status
     
-    var meshService = BluetoothMeshService()
+    var meshService: MeshServiceProtocol = BluetoothMeshService()
     private let userDefaults = UserDefaults.standard
     private let nicknameKey = "bitchat.nickname"
     private let joinedChannelsKey = "bitchat.joinedChannels"
     private let passwordProtectedChannelsKey = "bitchat.passwordProtectedChannels"
-    private let channelCreatorsKey = "bitchat.channelCreators"
     // private let channelPasswordsKey = "bitchat.channelPasswords" // Now using Keychain
     private let channelKeyCommitmentsKey = "bitchat.channelKeyCommitments"
     private let retentionEnabledChannelsKey = "bitchat.retentionEnabledChannels"
