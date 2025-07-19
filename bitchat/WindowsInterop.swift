@@ -153,6 +153,30 @@ public func Bitchat_GetPeerNicknamesJSON() -> UnsafeMutablePointer<CChar>? {
     return strdup(json)
 }
 
+@_cdecl("Bitchat_GetNickname")
+public func Bitchat_GetNickname() -> UnsafeMutablePointer<CChar>? {
+    guard let viewModel = sharedViewModel else { return nil }
+    return strdup(viewModel.nickname)
+}
+
+@_cdecl("Bitchat_GetJoinedChannelsJSON")
+public func Bitchat_GetJoinedChannelsJSON() -> UnsafeMutablePointer<CChar>? {
+    guard let viewModel = sharedViewModel else { return nil }
+    let channels = Array(viewModel.joinedChannels)
+    guard let data = try? JSONSerialization.data(withJSONObject: channels, options: []) else { return nil }
+    let json = String(data: data, encoding: .utf8) ?? ""
+    return strdup(json)
+}
+
+@_cdecl("Bitchat_GetPrivateChatPeersJSON")
+public func Bitchat_GetPrivateChatPeersJSON() -> UnsafeMutablePointer<CChar>? {
+    guard let viewModel = sharedViewModel else { return nil }
+    let peers = Array(viewModel.privateChats.keys)
+    guard let data = try? JSONSerialization.data(withJSONObject: peers, options: []) else { return nil }
+    let json = String(data: data, encoding: .utf8) ?? ""
+    return strdup(json)
+}
+
 // MARK: - Encryption Utilities
 
 @_cdecl("Bitchat_GetFingerprint")
