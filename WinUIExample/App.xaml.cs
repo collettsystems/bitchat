@@ -1,24 +1,18 @@
 using Microsoft.UI.Xaml;
-using System.Runtime.InteropServices;
 
 namespace WinUIExample
 {
     public partial class App : Application
     {
-        [DllImport("bitchat.dll", CallingConvention = CallingConvention.Cdecl)]
-        private static extern void Bitchat_Initialize();
-
-        [DllImport("bitchat.dll", CallingConvention = CallingConvention.Cdecl)]
-        private static extern void Bitchat_Shutdown();
-
         public App()
         {
             this.InitializeComponent();
-            Bitchat_Initialize();
+            Native.Bitchat_Initialize();
         }
 
-        protected override void OnExit() {
-            Bitchat_Shutdown();
+        protected override void OnExit()
+        {
+            Native.Bitchat_Shutdown();
             base.OnExit();
         }
     }
